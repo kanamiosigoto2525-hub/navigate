@@ -2,112 +2,90 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>トラック運転手支援アプリ(試作)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>トラックルート記録</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f0f0; }
-        h2 { text-align: center; color: #333; }
-        
-        /* 巨大なボタンのスタイル */
+        body { margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        #map { flex: 1; width: 100%; } /* 地図の高さ */
+        .controls { padding: 15px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
         .btn {
-            display: block; width: 100%; padding: 30px; margin-bottom: 20px;
-            font-size: 24px; font-weight: bold; border: none; border-radius: 15px;
-            cursor: pointer; text-align: center;
+            display: block; width: 100%; padding: 20px; margin-bottom: 10px;
+            font-size: 20px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer;
         }
-        .btn-record { background: #ffcc00; color: #000; } /* 記録開始/停止 */
-        .btn-voice { background: #ff4444; color: #fff; }  /* 音声メモ */
-        .btn-save { background: #228b22; color: #fff; }   /* 保存 */
-
-        /* 入力エリア */
-        textarea {
-            width: 100%; height: 120px; font-size: 20px;
-            margin-bottom: 10px; border-radius: 10px; border: 2px solid #ccc;
-            box-sizing: border-box; padding: 10px;
-        }
-
-        #status { font-weight: bold; color: blue; text-align: center; margin-bottom: 10px; }
-        #log { background: #fff; padding: 10px; border-radius: 10px; font-size: 14px; }
+        .btn-start { background: #007bff; color: #fff; }
+        .btn-stop { background: #dc3545; color: #fff; }
+        .btn-voice { background: #ffc107; color: #000; }
+        textarea { width: 100%; height: 60px; font-size: 16px; margin-top: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
-    <h2>ルート記録アプリ</h2>
-    <div id="status">待機中</div>
+    <div id="map"></div>
 
-    <button id="recordBtn" class="btn btn-record" onclick="toggleRecord()">ルート記録開始</button>
-
-    <hr>
-
-    <p>地点メモ（文字入力も可）</p>
-    <textarea id="memoText" placeholder="ここにメモが表示されます..."></textarea>
-
-    <button id="voiceBtn" class="btn btn-voice" onclick="startVoice()">🎤 声でメモを入れる</button>
-
-    <button class="btn btn-save" onclick="saveMemo()">この地点を保存</button>
-
-    <div id="log">【記録ログ】</div>
+    <div class="controls">
+        <button id="recordBtn" class="btn btn-start" onclick="toggleTracking()">ルート記録開始</button>
+        <button id="voiceBtn" class="btn btn-voice" onclick="startVoice()">🎤 声でメモを入れる</button>
+        <textarea id="memoText" placeholder="メモ（自動保存されます）"></textarea>
+    </div>
 
     <script>
-        let isRecording = false;
+        let map, marker, pathLine;
+        let tracking = false;
         let watchId = null;
+        let coords = []; // 通った道の緯度経度を保存
 
-        // --- ルート記録の切り替え ---
-        function toggleRecord() {
+        // 地図の初期化（最初は東京付近）
+        map = L.map('map').setView([35.6812, 139.7671], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        pathLine = L.polyline([], {color: 'red', weight: 5}).addTo(map);
+        marker = L.circleMarker([0,0], {radius: 8, color: 'blue', fillOpacity: 1}).addTo(map);
+
+        // ルート記録の開始・停止
+        function toggleTracking() {
             const btn = document.getElementById('recordBtn');
-            const status = document.getElementById('status');
-            
-            if (!isRecording) {
-                isRecording = true;
-                btn.innerText = "記録停止";
-                btn.style.background = "#555";
-                btn.style.color = "#fff";
-                status.innerText = "GPS記録中...";
-                // 本来はここでGPS追跡を開始
+            if (!tracking) {
+                if (!navigator.geolocation) return alert("GPSが使えません");
+                tracking = true;
+                btn.innerText = "記録停止（保存）";
+                btn.className = "btn btn-stop";
+                
+                watchId = navigator.geolocation.watchPosition(pos => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const newPos = [lat, lng];
+                    
+                    coords.push(newPos);
+                    pathLine.setLatLngs(coords); // 線を更新
+                    marker.setLatLng(newPos);   // 現在地マークを更新
+                    map.panTo(newPos);          // 地図を自分中心に
+                }, err => console.error(err), {enableHighAccuracy: true});
             } else {
-                isRecording = false;
+                tracking = false;
                 btn.innerText = "ルート記録開始";
-                btn.style.background = "#ffcc00";
-                btn.style.color = "#000";
-                status.innerText = "保存完了";
+                btn.className = "btn btn-start";
+                navigator.geolocation.clearWatch(watchId);
+                alert("ルートを保存しました（ブラウザ内に一時保存）");
             }
         }
 
-        // --- 音声入力機能 ---
+        // 音声入力
         function startVoice() {
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ja-JP';
-            const status = document.getElementById('status');
-            const memoText = document.getElementById('memoText');
-
-            recognition.onstart = () => {
-                status.innerText = "聞いています...";
-                document.getElementById('voiceBtn').innerText = "認識中...";
-            };
-
             recognition.onresult = (event) => {
                 const text = event.results[0][0].transcript;
-                memoText.value = text;
-                status.innerText = "音声認識完了";
+                document.getElementById('memoText').value = text;
+                // その場所にピンを立てる
+                if (coords.length > 0) {
+                    L.marker(coords[coords.length - 1]).addTo(map).bindPopup(text).openPopup();
+                }
             };
-
-            recognition.onend = () => {
-                document.getElementById('voiceBtn').innerText = "🎤 声でメモを入れる";
-            };
-
             recognition.start();
-        }
-
-        // --- 地点保存 ---
-        function saveMemo() {
-            const text = document.getElementById('memoText').value;
-            if(!text) return alert("メモを入力してください");
-            
-            const log = document.getElementById('log');
-            const now = new Date().toLocaleTimeString();
-            log.innerHTML += `<div>[${now}] ${text}</div>`;
-            
-            document.getElementById('memoText').value = "";
-            document.getElementById('status').innerText = "地点を保存しました";
         }
     </script>
 </body>
