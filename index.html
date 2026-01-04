@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トラック運転手支援アプリ(試作)</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f0f0; }
+        h2 { text-align: center; color: #333; }
+        
+        /* 巨大なボタンのスタイル */
+        .btn {
+            display: block; width: 100%; padding: 30px; margin-bottom: 20px;
+            font-size: 24px; font-weight: bold; border: none; border-radius: 15px;
+            cursor: pointer; text-align: center;
+        }
+        .btn-record { background: #ffcc00; color: #000; } /* 記録開始/停止 */
+        .btn-voice { background: #ff4444; color: #fff; }  /* 音声メモ */
+        .btn-save { background: #228b22; color: #fff; }   /* 保存 */
+
+        /* 入力エリア */
+        textarea {
+            width: 100%; height: 120px; font-size: 20px;
+            margin-bottom: 10px; border-radius: 10px; border: 2px solid #ccc;
+            box-sizing: border-box; padding: 10px;
+        }
+
+        #status { font-weight: bold; color: blue; text-align: center; margin-bottom: 10px; }
+        #log { background: #fff; padding: 10px; border-radius: 10px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <h2>ルート記録アプリ</h2>
+    <div id="status">待機中</div>
+
+    <button id="recordBtn" class="btn btn-record" onclick="toggleRecord()">ルート記録開始</button>
+
+    <hr>
+
+    <p>地点メモ（文字入力も可）</p>
+    <textarea id="memoText" placeholder="ここにメモが表示されます..."></textarea>
+
+    <button id="voiceBtn" class="btn btn-voice" onclick="startVoice()">🎤 声でメモを入れる</button>
+
+    <button class="btn btn-save" onclick="saveMemo()">この地点を保存</button>
+
+    <div id="log">【記録ログ】</div>
+
+    <script>
+        let isRecording = false;
+        let watchId = null;
+
+        // --- ルート記録の切り替え ---
+        function toggleRecord() {
+            const btn = document.getElementById('recordBtn');
+            const status = document.getElementById('status');
+            
+            if (!isRecording) {
+                isRecording = true;
+                btn.innerText = "記録停止";
+                btn.style.background = "#555";
+                btn.style.color = "#fff";
+                status.innerText = "GPS記録中...";
+                // 本来はここでGPS追跡を開始
+            } else {
+                isRecording = false;
+                btn.innerText = "ルート記録開始";
+                btn.style.background = "#ffcc00";
+                btn.style.color = "#000";
+                status.innerText = "保存完了";
+            }
+        }
+
+        // --- 音声入力機能 ---
+        function startVoice() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'ja-JP';
+            const status = document.getElementById('status');
+            const memoText = document.getElementById('memoText');
+
+            recognition.onstart = () => {
+                status.innerText = "聞いています...";
+                document.getElementById('voiceBtn').innerText = "認識中...";
+            };
+
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                memoText.value = text;
+                status.innerText = "音声認識完了";
+            };
+
+            recognition.onend = () => {
+                document.getElementById('voiceBtn').innerText = "🎤 声でメモを入れる";
+            };
+
+            recognition.start();
+        }
+
+        // --- 地点保存 ---
+        function saveMemo() {
+            const text = document.getElementById('memoText').value;
+            if(!text) return alert("メモを入力してください");
+            
+            const log = document.getElementById('log');
+            const now = new Date().toLocaleTimeString();
+            log.innerHTML += `<div>[${now}] ${text}</div>`;
+            
+            document.getElementById('memoText').value = "";
+            document.getElementById('status').innerText = "地点を保存しました";
+        }
+    </script>
+</body>
+</html>
