@@ -3,89 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>トラックルート記録</title>
+    <title>トラックナビPRO</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
-        #map { flex: 1; width: 100%; } /* 地図の高さ */
-        .controls { padding: 15px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-        .btn {
-            display: block; width: 100%; padding: 20px; margin-bottom: 10px;
-            font-size: 20px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer;
-        }
-        .btn-start { background: #007bff; color: #fff; }
-        .btn-stop { background: #dc3545; color: #fff; }
-        .btn-voice { background: #ffc107; color: #000; }
-        textarea { width: 100%; height: 60px; font-size: 16px; margin-top: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        body { margin: 0; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 画面切り替え */
+        .screen { display: none; flex: 1; flex-direction: column; height: 100%; }
+        .active { display: flex; }
+
+        /* ログイン画面 */
+        #login-screen { justify-content: center; align-items: center; background: #333; color: white; text-align: center; padding: 20px; }
+        .login-btn { background: #4285F4; color: white; padding: 15px 30px; border: none; font-size: 18px; border-radius: 5px; cursor: pointer; }
+
+        /* メイン地図画面 */
+        #map { flex: 1; width: 100%; }
+        .controls { background: #fff; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 2px solid #ccc; }
+        .btn { padding: 15px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-align: center; }
+        .btn-rec { background: #dc3545; color: white; grid-column: 1 / 3; } /* 赤：記録 */
+        .btn-memo { background: #ffc107; color: black; } /* 黄：メモ */
+        .btn-list { background: #007bff; color: white; } /* 青：履歴 */
+
+        /* 履歴リスト画面 */
+        #list-screen { background: #f8f9fa; overflow-y: auto; }
+        .header { background: #333; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .route-item { background: white; margin: 10px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
+        .route-date { color: #888; font-size: 12px; }
+        .route-name { font-size: 18px; font-weight: bold; margin: 5px 0; }
+        .back-btn { background: #6c757d; color: white; border: none; padding: 5px 15px; border-radius: 5px; }
+
+        /* モーダル（保存時の名前入力） */
+        #save-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 80%; text-align: center; }
+        .input-name { width: 90%; padding: 10px; font-size: 18px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="map"></div>
+    <div id="login-screen" class="screen active">
+        <h2>トラックナビ PRO</h2>
+        <p>関係者専用・安全運転支援ツール</p>
+        <button class="login-btn" onclick="login()">Googleアカウントでログイン</button>
+    </div>
 
-    <div class="controls">
-        <button id="recordBtn" class="btn btn-start" onclick="toggleTracking()">ルート記録開始</button>
-        <button id="voiceBtn" class="btn btn-voice" onclick="startVoice()">🎤 声でメモを入れる</button>
-        <textarea id="memoText" placeholder="メモ（自動保存されます）"></textarea>
+    <div id="main-screen" class="screen">
+        <div id="map"></div>
+        <div class="controls">
+            <button id="recBtn" class="btn btn-rec" onclick="toggleRecord()">🔴 ルート記録開始</button>
+            <button class="btn btn-memo" onclick="voiceMemo()">🎤 声でメモ</button>
+            <button class="btn btn-list" onclick="showList()">📂 履歴を見る</button>
+        </div>
+    </div>
+
+    <div id="list-screen" class="screen">
+        <div class="header">
+            <span>保存されたルート</span>
+            <button class="back-btn" onclick="showMap()">地図に戻る</button>
+        </div>
+        <div id="route-list">
+            </div>
+    </div>
+
+    <div id="save-modal">
+        <div class="modal-content">
+            <h3>ルートを保存</h3>
+            <input type="text" id="routeName" class="input-name" placeholder="例：東京港〜埼玉倉庫">
+            <button class="btn btn-list" onclick="confirmSave()">保存する</button>
+            <br><br>
+            <button style="background:none; border:none; color:#888;" onclick="cancelSave()">キャンセル</button>
+        </div>
     </div>
 
     <script>
-        let map, marker, pathLine;
-        let tracking = false;
-        let watchId = null;
-        let coords = []; // 通った道の緯度経度を保存
+        // ▼▼▼▼▼ ここにコピーした鍵を貼り付けてください ▼▼▼▼▼
+        const firebaseConfig = {
+            // ここに貼り付け（apiKey: "...", などが入ります）
+        };
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-        // 地図の初期化（最初は東京付近）
-        map = L.map('map').setView([35.6812, 139.7671], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+        // Firebase初期化
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-        pathLine = L.polyline([], {color: 'red', weight: 5}).addTo(map);
-        marker = L.circleMarker([0,0], {radius: 8, color: 'blue', fillOpacity: 1}).addTo(map);
+        let map, polyline, currentPath = [], watchId, user;
+        let markers = [];
 
-        // ルート記録の開始・停止
-        function toggleTracking() {
-            const btn = document.getElementById('recordBtn');
-            if (!tracking) {
-                if (!navigator.geolocation) return alert("GPSが使えません");
-                tracking = true;
-                btn.innerText = "記録停止（保存）";
-                btn.className = "btn btn-stop";
+        // --- 1. ログイン処理 ---
+        function login() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(alert);
+        }
+
+        auth.onAuthStateChanged((u) => {
+            if (u) {
+                user = u;
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('main-screen').classList.add('active');
+                initMap();
+                alert("ログインしました: " + user.displayName);
+            }
+        });
+
+        // --- 2. 地図初期化 ---
+        function initMap() {
+            if(map) return;
+            map = L.map('map').setView([35.6812, 139.7671], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            polyline = L.polyline([], { color: 'red', weight: 5 }).addTo(map);
+
+            // 現在地へ移動
+            map.locate({setView: true, maxZoom: 16});
+            map.on('locationfound', (e) => {
+                L.circle(e.latlng, {radius: 20}).addTo(map);
+            });
+        }
+
+        // --- 3. 記録機能 ---
+        let isRecording = false;
+        function toggleRecord() {
+            const btn = document.getElementById('recBtn');
+            if (!isRecording) {
+                // 開始
+                isRecording = true;
+                currentPath = [];
+                markers = []; // メモもリセット
+                polyline.setLatLngs([]);
+                btn.innerHTML = "⬛ 記録終了（保存）";
+                btn.style.background = "#333";
                 
-                watchId = navigator.geolocation.watchPosition(pos => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    const newPos = [lat, lng];
-                    
-                    coords.push(newPos);
-                    pathLine.setLatLngs(coords); // 線を更新
-                    marker.setLatLng(newPos);   // 現在地マークを更新
-                    map.panTo(newPos);          // 地図を自分中心に
-                }, err => console.error(err), {enableHighAccuracy: true});
+                watchId = navigator.geolocation.watchPosition((pos) => {
+                    const latlng = [pos.coords.latitude, pos.coords.longitude];
+                    currentPath.push(latlng);
+                    polyline.setLatLngs(currentPath);
+                    map.panTo(latlng);
+                }, null, { enableHighAccuracy: true });
             } else {
-                tracking = false;
-                btn.innerText = "ルート記録開始";
-                btn.className = "btn btn-start";
+                // 終了 → 保存モーダルを開く
                 navigator.geolocation.clearWatch(watchId);
-                alert("ルートを保存しました（ブラウザ内に一時保存）");
+                isRecording = false;
+                btn.innerHTML = "🔴 ルート記録開始";
+                btn.style.background = "#dc3545";
+                document.getElementById('save-modal').style.display = 'flex';
             }
         }
 
-        // 音声入力
-        function startVoice() {
+        // 保存キャンセル
+        function cancelSave() {
+            document.getElementById('save-modal').style.display = 'none';
+            alert("保存せずに終了しました");
+        }
+
+        // --- 4. データベースへの保存 ---
+        function confirmSave() {
+            const name = document.getElementById('routeName').value;
+            if(!name) return alert("ルート名を入力してください");
+
+            db.collection("routes").add({
+                name: name,
+                driver: user.displayName,
+                date: new Date(),
+                path: currentPath,
+                memos: markers, // メモ情報も保存
+                uid: user.uid
+            }).then(() => {
+                alert("保存完了！");
+                document.getElementById('save-modal').style.display = 'none';
+                document.getElementById('routeName').value = "";
+            }).catch((err) => alert("エラー: " + err.message));
+        }
+
+        // --- 5. 音声メモ ---
+        function voiceMemo() {
+            if (!isRecording) return alert("記録中のみメモできます");
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ja-JP';
             recognition.onresult = (event) => {
                 const text = event.results[0][0].transcript;
-                document.getElementById('memoText').value = text;
-                // その場所にピンを立てる
-                if (coords.length > 0) {
-                    L.marker(coords[coords.length - 1]).addTo(map).bindPopup(text).openPopup();
+                const lastPos = currentPath[currentPath.length - 1];
+                if(lastPos) {
+                    L.marker(lastPos).addTo(map).bindPopup(text).openPopup();
+                    markers.push({ lat: lastPos[0], lng: lastPos[1], text: text });
                 }
             };
             recognition.start();
+        }
+
+        // --- 6. 履歴表示 ---
+        function showList() {
+            document.getElementById('main-screen').classList.remove('active');
+            document.getElementById('list-screen').classList.add('active');
+            
+            const listDiv = document.getElementById('route-list');
+            listDiv.innerHTML = "読み込み中...";
+
+            // データベースからデータ取得（新しい順）
+            db.collection("routes").orderBy("date", "desc").limit(20).get().then((snap) => {
+                listDiv.innerHTML = "";
+                snap.forEach((doc) => {
+                    const data = doc.data();
+                    const dateStr = data.date.toDate().toLocaleString();
+                    
+                    const div = document.createElement('div');
+                    div.className = "route-item";
+                    div.innerHTML = `
+                        <div class="route-date">${dateStr} - ${data.driver}</div>
+                        <div class="route-name">${data.name}</div>
+                    `;
+                    div.onclick = () => loadRoute(data);
+                    listDiv.appendChild(div);
+                });
+            });
+        }
+
+        function showMap() {
+            document.getElementById('list-screen').classList.remove('active');
+            document.getElementById('main-screen').classList.add('active');
+        }
+
+        // --- 7. ルート再現 ---
+        function loadRoute(data) {
+            showMap();
+            // 既存の線をクリアして描画
+            polyline.setLatLngs(data.path);
+            // 色を青に変えて「過去のルート」であることを示す
+            polyline.setStyle({ color: 'blue', opacity: 0.7 });
+            
+            // 地図の範囲をルート全体に合わせる
+            if(data.path.length > 0) {
+                const bounds = L.latLngBounds(data.path);
+                map.fitBounds(bounds);
+            }
+
+            // メモ（ピン）を復元
+            if(data.memos) {
+                data.memos.forEach(m => {
+                    L.marker([m.lat, m.lng]).addTo(map).bindPopup(m.text);
+                });
+            }
+            alert(`「${data.name}」を読み込みました。\n青い線に沿って走行してください。`);
         }
     </script>
 </body>
