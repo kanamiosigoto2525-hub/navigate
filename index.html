@@ -105,8 +105,9 @@
         // --- 1. ログイン処理 ---
         function login() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(alert);
-        }
+            // スマホで確実な「リダイレクト方式」に変更
+            auth.signInWithRedirect(provider);
+        } 
 
         auth.onAuthStateChanged((u) => {
             if (u) {
@@ -259,4 +260,5 @@
     </script>
 </body>
 </html>
+
 
