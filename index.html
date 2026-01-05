@@ -13,43 +13,57 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { margin: 0; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: sans-serif; height: 100vh; width: 100vw; overflow: hidden; background: #eee; }
         
-        /* 画面切り替え */
-        .screen { display: none; flex: 1; flex-direction: column; height: 100%; }
+        /* 画面全体の管理 */
+        .screen { display: none; height: 100vh; width: 100vw; flex-direction: column; position: absolute; top:0; left:0; }
         .active { display: flex; }
 
         /* ログイン画面 */
-        #login-screen { justify-content: center; align-items: center; background: #333; color: white; text-align: center; padding: 20px; }
-        .login-btn { background: #4285F4; color: white; padding: 15px 30px; border: none; font-size: 18px; border-radius: 5px; cursor: pointer; }
+        #login-screen { justify-content: center; align-items: center; background: #333; color: white; text-align: center; padding: 20px; z-index: 2000; }
+        .login-btn { background: #4285F4; color: white; padding: 18px 30px; border: none; font-size: 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
 
-        /* メイン地図画面 */
-        #map { flex: 1; width: 100%; }
-        .controls { background: #fff; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 2px solid #ccc; }
-        .btn { padding: 15px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-align: center; }
-        .btn-rec { background: #dc3545; color: white; grid-column: 1 / 3; } /* 赤：記録 */
-        .btn-memo { background: #ffc107; color: black; } /* 黄：メモ */
-        .btn-list { background: #007bff; color: white; } /* 青：履歴 */
+        /* メイン画面：地図とボタン */
+        #main-screen { background: white; }
+        #map { flex: 1; width: 100%; z-index: 1; } /* 地図が最背面に */
+        
+        /* 操作パネル：ここが見えない問題を修正 */
+        .controls { 
+            height: 160px; /* 高さを固定して確実に見えるように */
+            background: white; 
+            padding: 10px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px; 
+            border-top: 3px solid #ccc;
+            z-index: 10;
+        }
+        .btn { padding: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; height: 60px; }
+        .btn-rec { background: #dc3545; color: white; grid-column: 1 / 3; height: 70px; font-size: 18px; }
+        .btn-memo { background: #ffc107; color: black; }
+        .btn-list { background: #007bff; color: white; }
 
         /* 履歴リスト画面 */
-        #list-screen { background: #f8f9fa; overflow-y: auto; }
-        .header { background: #333; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .route-item { background: white; margin: 10px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
+        #list-screen { background: #f8f9fa; z-index: 100; }
+        .header { background: #333; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; height: 60px; }
+        #route-list { flex: 1; overflow-y: auto; padding-bottom: 20px; }
+        .route-item { background: white; margin: 10px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .route-date { color: #888; font-size: 12px; }
-        .route-name { font-size: 18px; font-weight: bold; margin: 5px 0; }
-        .back-btn { background: #6c757d; color: white; border: none; padding: 5px 15px; border-radius: 5px; }
+        .route-name { font-size: 18px; font-weight: bold; margin: 5px 0; color: #333; }
+        .back-btn { background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; }
 
-        /* モーダル（保存時の名前入力） */
-        #save-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 80%; text-align: center; }
-        .input-name { width: 90%; padding: 10px; font-size: 18px; margin-bottom: 10px; }
+        /* 保存モーダル */
+        #save-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 3000; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 85%; text-align: center; }
+        .input-name { width: 100%; padding: 12px; font-size: 18px; margin-bottom: 15px; border: 2px solid #ccc; border-radius: 5px; }
     </style>
 </head>
 <body>
 
     <div id="login-screen" class="screen active">
-        <h2>トラックナビ PRO</h2>
-        <p>関係者専用・安全運転支援ツール</p>
+        <h1>トラックナビ PRO</h1>
+        <p>安全運転支援システム</p>
         <button class="login-btn" onclick="login()">Googleアカウントでログイン</button>
     </div>
 
@@ -64,37 +78,34 @@
 
     <div id="list-screen" class="screen">
         <div class="header">
-            <span>保存されたルート</span>
+            <strong>保存履歴</strong>
             <button class="back-btn" onclick="showMap()">地図に戻る</button>
         </div>
-        <div id="route-list">
-            </div>
+        <div id="route-list"></div>
     </div>
 
     <div id="save-modal">
         <div class="modal-content">
             <h3>ルートを保存</h3>
-            <input type="text" id="routeName" class="input-name" placeholder="例：東京港〜埼玉倉庫">
-            <button class="btn btn-list" onclick="confirmSave()">保存する</button>
-            <br><br>
-            <button style="background:none; border:none; color:#888;" onclick="cancelSave()">キャンセル</button>
+            <input type="text" id="routeName" class="input-name" placeholder="例：東京〜大阪 430休憩">
+            <button class="btn btn-list" style="width:100%" onclick="confirmSave()">保存する</button>
+            <button style="margin-top:15px; background:none; border:none; color:#666;" onclick="cancelSave()">キャンセル</button>
         </div>
     </div>
 
     <script>
-        // ▼▼▼▼▼ ここにコピーした鍵を貼り付けてください ▼▼▼▼▼
+        // ▼▼▼ あなたの Firebase Config をここに貼り付け ▼▼▼
         const firebaseConfig = {
           apiKey: "AIzaSyCq4TWpOj6qX1Qry8jRaQB_OzbvmIZEGtc",
-  　　　　 authDomain: "trucknavigate.firebaseapp.com",
+          authDomain: "trucknavigate.firebaseapp.com",
           projectId: "trucknavigate",
           storageBucket: "trucknavigate.firebasestorage.app",
           messagingSenderId: "429914204126",
           appId: "1:429914204126:web:db852f940aa2fb4dc75f4f",
- 
+          measurementId: "G-49DRXDDD72"
         };
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-        // Firebase初期化
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
@@ -102,46 +113,54 @@
         let map, polyline, currentPath = [], watchId, user;
         let markers = [];
 
-        // --- 1. ログイン処理 ---
+        // --- ログイン処理（リダイレクト対応強化） ---
         function login() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            // スマホで確実な「リダイレクト方式」に変更
             auth.signInWithRedirect(provider);
-        } 
+        }
 
-        auth.onAuthStateChanged((u) => {
-            if (u) {
-                user = u;
-                document.getElementById('login-screen').classList.remove('active');
-                document.getElementById('main-screen').classList.add('active');
-                initMap();
-                alert("ログインしました: " + user.displayName);
+        // リダイレクトから戻ってきた時の処理
+        auth.getRedirectResult().then((result) => {
+            if (result.user) {
+                console.log("ログイン成功");
+            }
+        }).catch((error) => {
+            if (error.code !== 'auth/internal-error') { // 無視できるエラーを除外
+                console.error("Auth Error:", error);
             }
         });
 
-        // --- 2. 地図初期化 ---
-        function initMap() {
-            if(map) return;
-            map = L.map('map').setView([35.6812, 139.7671], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-            polyline = L.polyline([], { color: 'red', weight: 5 }).addTo(map);
+        // 状態監視
+        auth.onAuthStateChanged((u) => {
+            if (u) {
+                user = u;
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById('main-screen').classList.add('active');
+                setTimeout(initMap, 500); // 画面切り替え後に地図を初期化
+            }
+        });
 
-            // 現在地へ移動
-            map.locate({setView: true, maxZoom: 16});
+        // --- 地図 ---
+        function initMap() {
+            if(map) { map.invalidateSize(); return; }
+            map = L.map('map').setView([35.68, 139.76], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            polyline = L.polyline([], { color: 'red', weight: 6 }).addTo(map);
+            
+            map.locate({setView: true, maxZoom: 15});
             map.on('locationfound', (e) => {
-                L.circle(e.latlng, {radius: 20}).addTo(map);
+                L.circle(e.latlng, {radius: 15, color: 'blue'}).addTo(map);
             });
         }
 
-        // --- 3. 記録機能 ---
+        // --- 記録 ---
         let isRecording = false;
         function toggleRecord() {
             const btn = document.getElementById('recBtn');
             if (!isRecording) {
-                // 開始
                 isRecording = true;
                 currentPath = [];
-                markers = []; // メモもリセット
+                markers = [];
                 polyline.setLatLngs([]);
                 btn.innerHTML = "⬛ 記録終了（保存）";
                 btn.style.background = "#333";
@@ -151,43 +170,92 @@
                     currentPath.push(latlng);
                     polyline.setLatLngs(currentPath);
                     map.panTo(latlng);
-                }, null, { enableHighAccuracy: true });
+                }, (err) => { console.error(err); }, { enableHighAccuracy: true });
             } else {
-                // 終了 → 保存モーダルを開く
                 navigator.geolocation.clearWatch(watchId);
                 isRecording = false;
                 btn.innerHTML = "🔴 ルート記録開始";
                 btn.style.background = "#dc3545";
-                document.getElementById('save-modal').style.display = 'flex';
+                if(currentPath.length > 0) {
+                    document.getElementById('save-modal').style.display = 'flex';
+                } else {
+                    alert("移動データがないため保存できません");
+                }
             }
         }
 
-        // 保存キャンセル
         function cancelSave() {
             document.getElementById('save-modal').style.display = 'none';
-            alert("保存せずに終了しました");
         }
 
-        // --- 4. データベースへの保存 ---
+        // --- 保存処理（不具合修正済み） ---
         function confirmSave() {
             const name = document.getElementById('routeName').value;
             if(!name) return alert("ルート名を入力してください");
+            if(!user) return alert("ログインが必要です");
 
+            // 保存処理
             db.collection("routes").add({
                 name: name,
-                driver: user.displayName,
-                date: new Date(),
+                driver: user.displayName || "ドライバー",
+                date: firebase.firestore.FieldValue.serverTimestamp(),
                 path: currentPath,
-                memos: markers, // メモ情報も保存
+                memos: markers,
                 uid: user.uid
             }).then(() => {
                 alert("保存完了！");
                 document.getElementById('save-modal').style.display = 'none';
                 document.getElementById('routeName').value = "";
-            }).catch((err) => alert("エラー: " + err.message));
+                currentPath = [];
+                polyline.setLatLngs([]);
+            }).catch((err) => {
+                console.error(err);
+                alert("保存エラー: " + err.message);
+            });
         }
 
-        // --- 5. 音声メモ ---
+        // --- 履歴表示 ---
+        function showList() {
+            document.getElementById('main-screen').classList.remove('active');
+            document.getElementById('list-screen').classList.add('active');
+            
+            const listDiv = document.getElementById('route-list');
+            listDiv.innerHTML = "<p style='padding:20px'>読み込み中...</p>";
+
+            db.collection("routes").orderBy("date", "desc").limit(20).get().then((snap) => {
+                listDiv.innerHTML = "";
+                if(snap.empty) { listDiv.innerHTML = "<p style='padding:20px'>履歴はありません</p>"; }
+                snap.forEach((doc) => {
+                    const data = doc.data();
+                    const d = data.date ? data.date.toDate() : new Date();
+                    const div = document.createElement('div');
+                    div.className = "route-item";
+                    div.innerHTML = `
+                        <div class="route-date">${d.toLocaleString()} - ${data.driver}</div>
+                        <div class="route-name">${data.name}</div>
+                        <button class="btn-list" style="padding:5px 10px; height:auto; width:100%" onclick='event.stopPropagation(); loadRoute(${JSON.stringify(data)})'>このルートを地図に表示</button>
+                    `;
+                    listDiv.appendChild(div);
+                });
+            }).catch(err => {
+                listDiv.innerHTML = "読み込みエラー: " + err.message;
+            });
+        }
+
+        function showMap() {
+            document.getElementById('list-screen').classList.remove('active');
+            document.getElementById('main-screen').classList.add('active');
+            if(map) map.invalidateSize();
+        }
+
+        function loadRoute(data) {
+            showMap();
+            polyline.setLatLngs(data.path);
+            polyline.setStyle({ color: 'blue', weight: 8 });
+            if(data.path.length > 0) map.fitBounds(L.latLngBounds(data.path));
+            alert("過去のルートを青色で表示しました");
+        }
+
         function voiceMemo() {
             if (!isRecording) return alert("記録中のみメモできます");
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
@@ -202,63 +270,7 @@
             };
             recognition.start();
         }
-
-        // --- 6. 履歴表示 ---
-        function showList() {
-            document.getElementById('main-screen').classList.remove('active');
-            document.getElementById('list-screen').classList.add('active');
-            
-            const listDiv = document.getElementById('route-list');
-            listDiv.innerHTML = "読み込み中...";
-
-            // データベースからデータ取得（新しい順）
-            db.collection("routes").orderBy("date", "desc").limit(20).get().then((snap) => {
-                listDiv.innerHTML = "";
-                snap.forEach((doc) => {
-                    const data = doc.data();
-                    const dateStr = data.date.toDate().toLocaleString();
-                    
-                    const div = document.createElement('div');
-                    div.className = "route-item";
-                    div.innerHTML = `
-                        <div class="route-date">${dateStr} - ${data.driver}</div>
-                        <div class="route-name">${data.name}</div>
-                    `;
-                    div.onclick = () => loadRoute(data);
-                    listDiv.appendChild(div);
-                });
-            });
-        }
-
-        function showMap() {
-            document.getElementById('list-screen').classList.remove('active');
-            document.getElementById('main-screen').classList.add('active');
-        }
-
-        // --- 7. ルート再現 ---
-        function loadRoute(data) {
-            showMap();
-            // 既存の線をクリアして描画
-            polyline.setLatLngs(data.path);
-            // 色を青に変えて「過去のルート」であることを示す
-            polyline.setStyle({ color: 'blue', opacity: 0.7 });
-            
-            // 地図の範囲をルート全体に合わせる
-            if(data.path.length > 0) {
-                const bounds = L.latLngBounds(data.path);
-                map.fitBounds(bounds);
-            }
-
-            // メモ（ピン）を復元
-            if(data.memos) {
-                data.memos.forEach(m => {
-                    L.marker([m.lat, m.lng]).addTo(map).bindPopup(m.text);
-                });
-            }
-            alert(`「${data.name}」を読み込みました。\n青い線に沿って走行してください。`);
-        }
     </script>
 </body>
 </html>
-
 
